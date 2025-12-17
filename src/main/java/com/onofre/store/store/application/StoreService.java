@@ -23,13 +23,22 @@ public class StoreService {
         this.adams = adams;
     }
 
-    public void updateStores(Map<String, Object> pay) throws Exception {
-        Map<String, Object> debt = (Map<String, Object>) pay.get("debt");
+    public void updateStores(Map<String, Object> hook) throws Exception {
+        Map<String, Object> debt = (Map<String, Object>) hook.get("debt");
         String id = (String) debt.get("docId");
 
         StoreDAO dao = repository.findById(id).orElseThrow(() -> new RuntimeException("Id not found"));
 
-        dao.setStatus(PayStatus.SUCCESS);
+        Map<String, Object> amount = (Map<String, Object>) debt.get("amount");
+        String value = (String) amount.get("value");
+        String paid = (String) amount.get("paid");
+
+        if(value.equalsIgnoreCase(paid)){
+            dao.setStatus(PayStatus.SUCCESS);
+        } else {
+            dao.setStatus(PayStatus.PENDING);
+        }
+
         repository.save(dao);
     }
 
