@@ -1,48 +1,35 @@
-# --- STAGE 1: Build jar ---
+# Etapa 1: Build
 FROM eclipse-temurin:25-jdk-alpine AS build
 
 WORKDIR /app
 
-# Copiamos pom.xml y descargamos dependencias
-COPY pom.xml .
-RUN ./mvnw dependency:go-offline -B
+# Instala Maven y bash
+RUN apk add --no-cache maven bash git
 
-# Copiamos el resto del proyecto
+# Copiamos proyecto completo
+COPY pom.xml .
 COPY src ./src
 
-# Construimos el jar
-RUN ./mvnw clean package -DskipTests -Pprod
+# Build del proyecto con perfil prod y sin tests
+RUN mvn clean package -DskipTests -Pprod
 
-# --- STAGE 2: Crear runtime mínimo con jlink ---
-FROM eclipse-temurin:25-jdk-alpine AS jlink
+# Etapa 2: Imagen mínima con jlink
+FROM eclipse-temurin:25-jdk-alpine AS runtime
 
 WORKDIR /app
 
-# Copiamos jar
+# Copiamos jar del build
 COPY --from=build /app/target/*.jar app.jar
 
-# Creamos un runtime mínimo con jlink
-RUN jlink \
-    --add-modules java.base,java.logging,java.sql,java.naming \
-    --output /app/runtime \
-    --compress 2 \
-    --no-header-files \
-    --no-man-pages
+# Copiamos variables de entorno (debe existir .env en el host si quieres inyectarlas)
+COPY .env .
 
-# --- STAGE 3: Imagen final ---
-FROM alpine:3.18
+# Variables de entorno para Spring Boot
+ENV SPRING_PROFILES_ACTIVE=prod
+ENV SPRING_CONFIG_LOCATION=classpath:/application.properties,file:./.env
 
-WORKDIR /app
-
-# Copiamos runtime y jar
-COPY --from=jlink /app/runtime /opt/java
-COPY --from=jlink /app/app.jar .
-
-# Configuramos PATH
-ENV PATH="/opt/java/bin:$PATH"
-
-# Exponemos puerto
+# Expone puerto
 EXPOSE 8080
 
-# Entry point
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Comando de ejecución
+ENTRYPOINT ["java","-jar","app.jar"]
